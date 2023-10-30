@@ -22,26 +22,30 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 void mouseMovementCallback(GLFWwindow* window, double xpos, double ypos);
 
-const unsigned int SCR_WIDTH = 1280;
-const unsigned int SCR_HEIGHT = 720;
+const unsigned int SCR_WIDTH = 800;
+const unsigned int SCR_HEIGHT = 600;
 
 std::vector<Object *> objects;
 Camera camera(glm::vec3(0, 0, 30.0f));
 
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
 int main()
 {
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, false);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    // glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, false);
 
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Yonazang's SSR", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
-        return -1;
+        return (-1);
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -51,7 +55,7 @@ int main()
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
+        return (-1);
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -173,23 +177,24 @@ int main()
 		true,
 		false,
 	};
-    for (int i = 0; i < cnt_models; i++)
-    {
-        if (object_mesh->LoadFromFileObj("filename") == false) {
-            return (-1);
-        }  
-        objects.push_back(\
-            new Object(*object_mesh, forward_pass_shader, \
-            obejct_transformations[i * 2], obejct_transformations[i * 2 + 1], projection));
-    }
+    // for (int i = 0; i < cnt_models; i++)
+    // {
+    //     if (object_mesh->LoadFromFileObj(("Models/" + std::string(object_names[i]) + ".obj").c_str()) == false) {
+    //         return (-1);
+    //     }  
+    //     objects.push_back(\
+    //         new Object(*object_mesh, forward_pass_shader, \
+    //         obejct_transformations[i * 2], obejct_transformations[i * 2 + 1], projection));
+    // }
     delete object_mesh;
 
-    // CHECK: 음? ground가 뭘까... SSR에서 사용하는 객체?
     cyTriMesh ground_mesh;
     if (ground_mesh.LoadFromFileObj("Models/ground.obj") == false) {
-        return -1;
+        return (-1);
     }   
-    Object *ground = new Object(ground_mesh, forward_pass_shader, glm::vec3(0.0f, -20.0f, 0.0f), glm::vec3(10.0f, 1.0f, 10.0f), projection);
+    Object *ground = new Object(ground_mesh, forward_pass_shader, \
+                                glm::vec3(0.0f, -20.0f, 0.0f), glm::vec3(10.0f, 1.0f, 10.0f), projection, \
+                                        true, false);
 
     Shader lighting_pass_shader("Shaders/DeferredPass.vs", "Shaders/DeferredPass.fs");
     lighting_pass_shader.use();
@@ -197,10 +202,9 @@ int main()
     lighting_pass_shader.setInt("gAlbedo", 1);
     lighting_pass_shader.setInt("gSpecular", 2);
     lighting_pass_shader.setInt("depthMap", 3);
-    // CHECK: constat, linear, quadratic의 의미
     glm::vec3 lights[] = {
         // position				// color						// constant, linear, quadratic
-        glm::vec3(20, 10, 10),    glm::vec3(1,1,1),               glm::vec3(1,0.007f,0.0002f),          //position, color, (constant, linear, quadratic)
+        glm::vec3(20, 10, 10),    glm::vec3(1,1,1),               glm::vec3(1,0.007f,0.0002f), 
         glm::vec3(-25, -5, -35), glm::vec3(0.224f,0.42f,0.659f), glm::vec3(1,0.007f,0.0002f),
         glm::vec3(25, -5, -35), glm::vec3(0.306f,0.714f,0.71f), glm::vec3(1,0.027,0.0028),
 	};
@@ -238,23 +242,36 @@ int main()
         processInput(window);
         // TODO: Frame 관련 처리(deltaTime 구해서 지연 반영?)
 
+        float currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+
         // 렌더링 기본 세팅
         glClearColor(0, 0, 0, 1.0f);
+        glStencilMask(0xFF);
         glEnable(GL_DEPTH_TEST);
 
         // CHECK: stencil 어떻게 사용되는지 확인 필요
         // forward pass (geomerty pass)
         glBindFramebuffer(GL_FRAMEBUFFER, gBuffer_FBO);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glStencilMask(0xFF);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
         // 오브젝트 및 땅 그려주기
+        glStencilFunc(GL_EQUAL, 0, 0xFF);
+        glStencilMask(0x00); 
 	    glm::mat4 view = camera.getViewMatrix();
-        for (std::vector<Object *>::iterator it = objects.begin(); it != objects.end(); it++)
-        {
-            (*it)->draw(view);
-        }
+        // for (std::vector<Object *>::iterator it = objects.begin(); it != objects.end(); it++)
+        // {
+        //     (*it)->draw(view); // set uniform and draw
+        // }
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);
+        glStencilMask(0xFF);
         ground->draw(view);
 
+
         // deferred(lighting) pass
+        
         glBindFramebuffer(GL_FRAMEBUFFER, lighting_FBO);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -268,7 +285,6 @@ int main()
         glBindTexture(GL_TEXTURE_2D, depthMap);
 
         lighting_pass_shader.use();
-        lighting_pass_shader.setVec3("lightPosition", view * glm::vec4(lights[0], 1));
         lighting_pass_shader.setFloat("SCR_WIDTH", SCR_WIDTH);
         lighting_pass_shader.setFloat("SCR_HEIGHT", SCR_HEIGHT);
         lighting_pass_shader.setMat4("invProj", glm::inverse(projection));
@@ -299,12 +315,14 @@ int main()
         SSR_shader.setMat4("projection", projection);
 
         glBindVertexArray(quad->GetVAO());
+        glStencilMask(0x00);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glDepthMask(GL_TRUE); // 설정 원상복귀
 
         // output (lighting pass와 SSR pass의 결과물을 합친다)
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, default_FBO); // 그냥 두번째 인자 0으로 해도 될듯?
-        glClear(GL_COLOR_BUFFER_BIT);
+        glStencilMask(0xFF);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorBuffer);
@@ -314,6 +332,7 @@ int main()
         glBindTexture(GL_TEXTURE_2D, gSpecular);
 
         output_shader.use();
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);
         glBindVertexArray(quad->GetVAO());
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -346,16 +365,16 @@ void processInput(GLFWwindow* window)
         glfwSetWindowShouldClose(window, true);
     }
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        camera.move(FORWARD, camera.speed);
+        camera.move(FORWARD, deltaTime * camera.speed);
     }
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        camera.move(BACKWARD, camera.speed);
+        camera.move(BACKWARD, deltaTime * camera.speed);
     }
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        camera.move(LEFT, camera.speed);
+        camera.move(LEFT, deltaTime * camera.speed);
     }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        camera.move(RIGHT, camera.speed);
+        camera.move(RIGHT, deltaTime * camera.speed);
     }
 }
 

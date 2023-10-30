@@ -28,6 +28,8 @@ private:
 	float movement_speed;
 	bool first_movement = true;
 
+	double xPos = 0, yPos = 0;
+
 public:
 	const float speed = 2.0f;
 
@@ -77,7 +79,36 @@ void Camera::move(movement dir, float delta_time)
 
 void Camera::rotate(float xpos, float ypos)
 {
-	// TODO: 구현
+	// TODO:
+	if (first_movement) {
+		xpos = xpos;
+		ypos = ypos;
+		first_movement = false;
+	}
+	float xoffset;
+	float yoffset;
+	xoffset = xpos - xPos;
+	yoffset = ypos - yPos;
+	xPos = xpos;
+	yPos = ypos;
+	xoffset *= mouse_sensitivity;
+	yoffset *= mouse_sensitivity;
+
+	yaw += xoffset;
+	pitch += yoffset;
+
+	if (pitch > 89.0f)
+		pitch = 89.0f;
+	if (pitch < -89.0f)
+		pitch = -89.0f;
+
+	glm::vec3 front;
+	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	front.y = -sin(glm::radians(pitch));
+	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	front = glm::normalize(front);
+	right = glm::normalize(glm::cross(front, world_up));
+	up = glm::normalize(-glm::cross(front, right));
 }
 
 glm::mat4 Camera::getViewMatrix() const
